@@ -8,14 +8,11 @@ def initialize(context):
     
     Output: n/a
     """
-    context.symbol = symbol('^GSPC')
-    
+    context.symbol = symbol('AAPL')
+
     # skip the first 300 days of the timeframe so that we have enough data to calculate our 10 month SMA
     context.skip = 0
-    
-    # # get every monthly closing price after 8/31/14
-    # context.monthly = web.get_data_google(context.symbol, '8/31/2014', interval='m')
-    
+
 def handle_data(context, data):
     """
     Calls the trading strategy function at the end of every month.
@@ -48,16 +45,16 @@ def trade(context, data):
     
     ### Faber's trading strategy ###
     
-    # if the current price exceeds moving average, buy
+    # if the current price exceeds moving average, long
     if monthly_price > moving_avg:
         order(context.symbol, 10)
 
-    # else if the current price is below moving average, sell
+    # else if the current price is below moving average, short
     elif monthly_price < moving_avg:
         order(context.symbol, -10)
-    
+
     # save/record the data for future plotting
-    record(S_and_P = monthly_price, sma = moving_avg)
+    record(AAPL = monthly_price, sma = moving_avg)
     
 def analyze(context = None, results = None):
     """
@@ -75,6 +72,7 @@ def analyze(context = None, results = None):
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
     results.portfolio_value.plot(ax=ax1)
+    results.portfolio_value.plot()
     ax1.set_ylabel('Portfolio value (USD)')
 
     ax2 = fig.add_subplot(212)
@@ -82,8 +80,8 @@ def analyze(context = None, results = None):
 
     # If data has been record()ed, then plot it.
     # Otherwise, log the fact that no data has been recorded.
-    if ('S_and_P' in results and 'sma' in results):
-        results['S&P'].plot(ax=ax2)
+    if ('AAPL' in results and 'sma' in results):
+        results['AAPL'].plot(ax=ax2)
         results['sma'].plot(ax=ax2)
 
         trans = results.ix[[t != [] for t in results.transactions]]
@@ -97,7 +95,7 @@ def analyze(context = None, results = None):
                  'v', markersize=10, color='k')
         plt.legend(loc=0)
     else:
-        msg = 'S&P, moving_avg data not captured using record().'
+        msg = 'AAPL, moving_avg data not captured using record().'
         ax2.annotate(msg, xy=(0.1, 0.5))
         log.info(msg)
 
