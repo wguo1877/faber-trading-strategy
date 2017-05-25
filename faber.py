@@ -8,7 +8,15 @@ def initialize(context):
     
     Output: n/a
     """
-    context.symbol = symbol('AAPL')
+    context.symbol = [symbol('AAPL'),
+                      symbol('MSFT'),
+                      symbol('AMZN'),
+                      symbol('JPM')]
+
+    # keep track of number of shares bought
+    context.shares = {}
+    for asset in context.symbol:
+        context.shares[asset] = 0
 
     # skip the first 300 days of the timeframe so that we have enough data to calculate our 10 month SMA
     context.skip = 0
@@ -38,23 +46,31 @@ def trade(context, data):
     Output: some kind of action (buy/sell/nothing) on the last trading day of each month
     """
     # Compute SMA
-    moving_avg = data.history(context.symbol, 'price', 300, '1d').mean()
-    
-    # Get closing price on last trading day of month
-    monthly_price = data.current(context.symbol, 'close')
+    moving_avg = {}
+    monthly_price = {}
+
+    for asset in context.symbol:
+        # calculate the 10-month (300 day) moving average of each asset
+        moving_avg[asset] = data.history(asset, 'close', 300, '1d').mean()
+
+        # Get closing price on last trading day of month
+        monthly_price[asset] = data.current(asset, 'close')
     
     ### Faber's trading strategy ###
     
     # if the current price exceeds moving average, long
-    if monthly_price > moving_avg:
-        order(context.symbol, 10)
+    for asset in context.symbol:
+        if monthly_price[asset] > moving_avg[asset]:
+            order(asset, 10)
+            context.shares[asset] += 10
 
-    # else if the current price is below moving average, short
-    elif monthly_price < moving_avg:
-        order(context.symbol, -10)
+        # else if the current price is below moving average, short
+        elif monthly_price[asset] < moving_avg[asset]:
+            order(asset, context.shares[asset])
+            context.shares[asset] = 0
 
-    # save/record the data for future plotting
-    record(AAPL = monthly_price, sma = moving_avg)
+        # save/record the data for future plotting
+        record(asset = monthly_price[asset], sma = moving_avg[asset])
     
 def analyze(context = None, results = None):
     """
@@ -72,7 +88,6 @@ def analyze(context = None, results = None):
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
     results.portfolio_value.plot(ax=ax1)
-    results.portfolio_value.plot()
     ax1.set_ylabel('Portfolio value (USD)')
 
     ax2 = fig.add_subplot(212)
@@ -80,23 +95,23 @@ def analyze(context = None, results = None):
 
     # If data has been record()ed, then plot it.
     # Otherwise, log the fact that no data has been recorded.
-    if ('AAPL' in results and 'sma' in results):
-        results['AAPL'].plot(ax=ax2)
-        results['sma'].plot(ax=ax2)
+    # if ('AAPL' in results and 'sma' in results):
+        # results['AAPL'].plot(ax=ax2)
+        # results['sma'].plot(ax=ax2)
 
-        trans = results.ix[[t != [] for t in results.transactions]]
-        buys = trans.ix[[t[0]['amount'] > 0 for t in
-                         trans.transactions]]
-        sells = trans.ix[
-            [t[0]['amount'] < 0 for t in trans.transactions]]
-        ax2.plot(buys.index, results.sma.ix[buys.index],
-                 '^', markersize=10, color='m')
-        ax2.plot(sells.index, results.sma.ix[sells.index],
-                 'v', markersize=10, color='k')
-        plt.legend(loc=0)
-    else:
-        msg = 'AAPL, moving_avg data not captured using record().'
-        ax2.annotate(msg, xy=(0.1, 0.5))
-        log.info(msg)
+        # trans = results.ix[[t != [] for t in results.transactions]]
+        # buys = trans.ix[[t[0]['amount'] > 0 for t in
+        #                  trans.transactions]]
+        # sells = trans.ix[
+        #     [t[0]['amount'] < 0 for t in trans.transactions]]
+        # ax2.plot(buys.index, results.sma.ix[buys.index],
+        #          '^', markersize=10, color='m')
+        # ax2.plot(sells.index, results.sma.ix[sells.index],
+        #          'v', markersize=10, color='k')
+        # plt.legend(loc=0)
+    # else:
+    #     msg = 'Data not captured using record().'
+    #     ax2.annotate(msg, xy=(0.1, 0.5))
+    #     log.info(msg)
 
     plt.show()     
