@@ -1,3 +1,4 @@
+from collections import defaultdict
 from zipline.api import order, record, symbol, date_rules, time_rules, schedule_function
 
 def initialize(context):
@@ -8,10 +9,10 @@ def initialize(context):
     
     Output: n/a
     """
-    context.symbol = [symbol('AAPL'),
+    context.symbol = [symbol('GOOG'),
+                      symbol('JPM'),
                       symbol('MSFT'),
-                      symbol('AMZN'),
-                      symbol('JPM')]
+                      symbol('WMT')]
 
     # keep track of number of shares bought
     context.shares = {}
@@ -20,6 +21,9 @@ def initialize(context):
 
     # skip the first 300 days of the timeframe so that we have enough data to calculate our 10 month SMA
     context.skip = 0
+
+    context.moving_avg = defaultdict(list)
+    context.monthly_price = defaultdict(int)
 
 def handle_data(context, data):
     """
@@ -30,12 +34,7 @@ def handle_data(context, data):
     Output: some kind of action (buy/sell/nothing)
     """
     # skip the first 100 days so that we have enough data to establish our moving average
-    context.skip += 1
-    if context.skip < 300:
-        pass
-    else:
-        # we only trade on the last trading day of each month; check here if it's the last day
-        schedule_function(trade, date_rules.month_end(), time_rules.market_close())
+    schedule_function(trade, date_rules.month_end(), time_rules.market_close())
     
 def trade(context, data):
     """
@@ -45,33 +44,42 @@ def trade(context, data):
     
     Output: some kind of action (buy/sell/nothing) on the last trading day of each month
     """
-    # Compute SMA
-    moving_avg = {}
-    monthly_price = {}
 
-    for asset in context.symbol:
-        # calculate the 10-month (300 day) moving average of each asset
-        moving_avg[asset] = data.history(asset, 'close', 300, '1d').mean()
+    context.skip += 1
 
-        # Get closing price on last trading day of month
-        monthly_price[asset] = data.current(asset, 'close')
-    
-    ### Faber's trading strategy ###
-    
-    # if the current price exceeds moving average, long
-    for asset in context.symbol:
-        if monthly_price[asset] > moving_avg[asset]:
-            order(asset, 10)
-            context.shares[asset] += 10
+    if context.skip < 10:
+        for asset in context.symbol:
+            context.monthly_price[asset].append(data.current(asset, 'close'))
 
-        # else if the current price is below moving average, short
-        elif monthly_price[asset] < moving_avg[asset]:
-            order(asset, context.shares[asset])
-            context.shares[asset] = 0
+    else:
+        for asset in context.symbol:
+            # Get closing price on last trading day of month
+            context.monthly_price[asset].append(data.current(asset, 'close'))
+            context.monthly_price[asset] = monthly_price[asset][context.skip - 10:context.skip]
 
-        # save/record the data for future plotting
-        record(asset = monthly_price[asset], sma = moving_avg[asset])
-    
+            # calculate the 10-month moving average of each asset
+            context.moving_avg[asset] = context.monthly_price[asset].mean()
+
+        
+        ### Faber's trading strategy ###
+        
+        # if the current price exceeds moving average, long
+        for asset in context.symbol:
+            if context.monthly_price[asset] > context.moving_avg[asset]:
+                order(asset, 30)
+                context.shares[asset] += 30
+
+            # else if the current price is below moving average, short
+            elif context.monthly_price[asset] < context.moving_avg[asset]:
+                order(asset, context.shares[asset])
+                context.shares[asset] = 0
+
+            # save/record the data for future plotting
+            record(asset = context.monthly_price[asset], sma = context.moving_avg[asset])
+
+            # # also record the S&P 500 monthly price
+            # record(SPY = data.current(symbol('SPY'), 'close'))
+        
 def analyze(context = None, results = None):
     """
     Plots the results of the strategy against a buy-and-hold strategy.
@@ -81,18 +89,17 @@ def analyze(context = None, results = None):
     Output: a plot of two superimposed curves, one being Faber's strategy and the other being a buy-and-hold strategy.
     """
     import matplotlib.pyplot as plt
-    import logbook
-    logbook.StderrHandler().push_application()
-    log = logbook.Logger('Algorithm')
 
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
+
+    # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
     results.portfolio_value.plot(ax=ax1)
     ax1.set_ylabel('Portfolio value (USD)')
 
     ax2 = fig.add_subplot(212)
     ax2.set_ylabel('Price (USD)')
-
+    # 
     # If data has been record()ed, then plot it.
     # Otherwise, log the fact that no data has been recorded.
     # if ('AAPL' in results and 'sma' in results):
