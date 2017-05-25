@@ -1,0 +1,1 @@
+# faber-trading-strategy
