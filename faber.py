@@ -1,3 +1,4 @@
+from numpy import mean
 from collections import defaultdict
 from zipline.api import order, record, symbol, date_rules, time_rules, schedule_function
 
@@ -9,21 +10,26 @@ def initialize(context):
     
     Output: n/a
     """
-    context.symbol = [symbol('GOOG'),
-                      symbol('JPM'),
-                      symbol('MSFT'),
-                      symbol('WMT')]
+
+    context.symbol = [symbol("XLB"),
+                      symbol("XLE"),
+                      symbol("XLF"), 
+                      symbol("XLK"), 
+                      symbol("XLP"), 
+                      symbol("XLY")]
 
     # keep track of number of shares bought
-    context.shares = {}
-    for asset in context.symbol:
-        context.shares[asset] = 0
+    # context.shares = {}
+    # for asset in context.symbol:
+    #     context.shares[asset] = 0
 
     # skip the first 300 days of the timeframe so that we have enough data to calculate our 10 month SMA
     context.skip = 0
 
-    context.moving_avg = defaultdict(list)
-    context.monthly_price = defaultdict(int)
+    # keep track of number of shares bought
+    context.shares = defaultdict(int)
+    context.moving_avg = defaultdict(int)
+    context.monthly_price = defaultdict(list)
 
 def handle_data(context, data):
     """
@@ -49,33 +55,37 @@ def trade(context, data):
 
     if context.skip < 10:
         for asset in context.symbol:
-            context.monthly_price[asset].append(data.current(asset, 'close'))
+            price = data.current(asset, 'close')
+            context.monthly_price[asset].append(price)
 
     else:
         for asset in context.symbol:
+            price = data.current(asset, 'close')
+
             # Get closing price on last trading day of month
-            context.monthly_price[asset].append(data.current(asset, 'close'))
-            context.monthly_price[asset] = monthly_price[asset][context.skip - 10:context.skip]
+            context.monthly_price[asset].append(price)
+            context.monthly_price[asset] = context.monthly_price[asset][1:11]
 
             # calculate the 10-month moving average of each asset
-            context.moving_avg[asset] = context.monthly_price[asset].mean()
+            context.moving_avg[asset] = mean(context.monthly_price[asset])
 
         
         ### Faber's trading strategy ###
         
         # if the current price exceeds moving average, long
         for asset in context.symbol:
-            if context.monthly_price[asset] > context.moving_avg[asset]:
-                order(asset, 30)
-                context.shares[asset] += 30
+            # the most current monthly price will be the one added most recently (so it'll be the element on the end of the list)
+            if context.monthly_price[asset][-1] > context.moving_avg[asset]:
+                order(asset, 300)
+                context.shares[asset] += 300
 
             # else if the current price is below moving average, short
-            elif context.monthly_price[asset] < context.moving_avg[asset]:
-                order(asset, context.shares[asset])
+            elif context.monthly_price[asset][-1] < context.moving_avg[asset]:
+                order(asset, -context.shares[asset])
                 context.shares[asset] = 0
 
             # save/record the data for future plotting
-            record(asset = context.monthly_price[asset], sma = context.moving_avg[asset])
+            record(asset = context.monthly_price[asset][-1], sma = context.moving_avg[asset])
 
             # # also record the S&P 500 monthly price
             # record(SPY = data.current(symbol('SPY'), 'close'))
@@ -97,8 +107,8 @@ def analyze(context = None, results = None):
     results.portfolio_value.plot(ax=ax1)
     ax1.set_ylabel('Portfolio value (USD)')
 
-    ax2 = fig.add_subplot(212)
-    ax2.set_ylabel('Price (USD)')
+    # ax2 = fig.add_subplot(212)
+    # ax2.set_ylabel('Price (USD)')
     # 
     # If data has been record()ed, then plot it.
     # Otherwise, log the fact that no data has been recorded.

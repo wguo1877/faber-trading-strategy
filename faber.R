@@ -1,0 +1,3 @@
+require(quantstrat)
+
+demo('faber')
