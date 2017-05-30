@@ -11,17 +11,20 @@ def initialize(context):
     Output: n/a
     """
 
-    context.symbol = [symbol("XLB"),
-                      symbol("XLE"),
-                      symbol("XLF"), 
-                      symbol("XLK"), 
-                      symbol("XLP"), 
-                      symbol("XLY")]
+    # context.symbol = [symbol('GOOG'),
+    #                   symbol('MSFT'),
+    #                   symbol('JPM'),
+    #                   symbol('AMZN')]
 
-    # keep track of number of shares bought
-    # context.shares = {}
-    # for asset in context.symbol:
-    #     context.shares[asset] = 0
+    # set initial cash to 1 mil
+    context.portfolio.starting_cash = 1000000
+
+    context.symbol = [symbol('XLB'),
+                      symbol('XLE'),
+                      symbol('XLF'), 
+                      symbol('XLK'), 
+                      symbol('XLP'), 
+                      symbol('XLY')]
 
     # skip the first 300 days of the timeframe so that we have enough data to calculate our 10 month SMA
     context.skip = 0
@@ -31,6 +34,9 @@ def initialize(context):
     context.moving_avg = defaultdict(int)
     context.monthly_price = defaultdict(list)
 
+    # skip the first 10 months so that we have enough data to establish our moving average
+    schedule_function(trade, date_rules.month_end(), time_rules.market_close())
+
 def handle_data(context, data):
     """
     Calls the trading strategy function at the end of every month.
@@ -39,9 +45,8 @@ def handle_data(context, data):
     
     Output: some kind of action (buy/sell/nothing)
     """
-    # skip the first 100 days so that we have enough data to establish our moving average
-    schedule_function(trade, date_rules.month_end(), time_rules.market_close())
-    
+    pass
+
 def trade(context, data):
     """
     Herein lies Faber's trading strategy.
@@ -55,12 +60,12 @@ def trade(context, data):
 
     if context.skip < 10:
         for asset in context.symbol:
-            price = data.current(asset, 'close')
+            price = data.current(asset, 'price')
             context.monthly_price[asset].append(price)
 
     else:
         for asset in context.symbol:
-            price = data.current(asset, 'close')
+            price = data.current(asset, 'price')
 
             # Get closing price on last trading day of month
             context.monthly_price[asset].append(price)
@@ -75,12 +80,13 @@ def trade(context, data):
         # if the current price exceeds moving average, long
         for asset in context.symbol:
             # the most current monthly price will be the one added most recently (so it'll be the element on the end of the list)
-            if context.monthly_price[asset][-1] > context.moving_avg[asset]:
-                order(asset, 300)
-                context.shares[asset] += 300
+            # also check that 
+            if context.monthly_price[asset][-1] > context.moving_avg[asset] and context.portfolio.cash > -1000000:
+                order(asset, 500)
+                context.shares[asset] += 500
 
             # else if the current price is below moving average, short
-            elif context.monthly_price[asset][-1] < context.moving_avg[asset]:
+            elif context.monthly_price[asset][-1] < context.moving_avg[asset] and context.shares[asset] > 0:
                 order(asset, -context.shares[asset])
                 context.shares[asset] = 0
 
@@ -89,7 +95,7 @@ def trade(context, data):
 
             # # also record the S&P 500 monthly price
             # record(SPY = data.current(symbol('SPY'), 'close'))
-        
+     
 def analyze(context = None, results = None):
     """
     Plots the results of the strategy against a buy-and-hold strategy.
