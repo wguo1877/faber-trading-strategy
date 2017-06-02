@@ -4,6 +4,7 @@ from numpy import mean
 from collections import defaultdict
 from zipline.api import order, record, symbol, date_rules, time_rules, schedule_function
 from write_to_sql import run
+import os
 
 def initialize(context):
     """
@@ -136,14 +137,13 @@ def analyze(context = None, results = None):
     """
     import matplotlib.pyplot as plt
 
-    run('C:\SQLite\db\chinook.db', results)
+    run('test.db', results, 'faber')
 
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
 
     # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
     results.portfolio_value.plot(ax=ax1)
-    # results['portfolio'].plot(ax=ax1)
     results['SPY'].plot(ax=ax1)
 
     ax1.set_ylabel('Portfolio value (USD)')

@@ -1,6 +1,11 @@
+import sys
+sys.path.append('C:/Users/William/Documents/GitHub/faber-trading-strategy/algos')
 from numpy import mean
 from collections import defaultdict
 from zipline.api import order, record, symbol, date_rules, time_rules, schedule_function
+from write_to_sql import run
+import pandas as pd
+import os
 
 def initialize(context):
     """
@@ -10,7 +15,7 @@ def initialize(context):
     
     Output: n/a
     """
-    # set initial cash to 1 mil
+    # set initial cash to 1 mil 
     context.portfolio.portfolio_value = float(1000000)
     context.portfolio.cash = float(1000000)
     context.portfolio.positions_value = float(0)
@@ -105,33 +110,15 @@ def analyze(context = None, results = None):
     """
     import matplotlib.pyplot as plt
 
+    run('test.db', results, 'dual_moving_avg')
+
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
 
     # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
     results.portfolio_value.plot(ax=ax1)
-    # results['portfolio'].plot(ax=ax1)
     results['SPY'].plot(ax=ax1)
 
     ax1.set_ylabel('Portfolio value (USD)')
 
-    # ax2 = fig.add_subplot(212)
-    # ax2.set_ylabel('Benchmark (USD)')
-    # results['SPY'].plot(ax=ax2)
-
-    # for asset in context.symbol:
-    #     results[asset].plot(ax=ax2)
-    #     results['sma' + asset].plot(ax=ax2)
-
-    # trans = results.ix[[t != [] for t in results.transactions]]
-    # buys = trans.ix[[t[0]['amount'] > 0 for t in
-    #                  trans.transactions]]
-    # sells = trans.ix[
-    #     [t[0]['amount'] < 0 for t in trans.transactions]]
-    # ax2.plot(buys.index, results.sma.ix[buys.index],
-    #          '^', markersize=10, color='m')
-    # ax2.plot(sells.index, results.sma.ix[sells.index],
-    #          'v', markersize=10, color='k')
-    # plt.legend(loc=0)
-
-    plt.show()     
+    plt.show()
