@@ -149,4 +149,9 @@ def analyze(context = None, results = None):
 
     plt.show()
 
-    run('test.db', results, 'faber')
+    tickers = []
+    for symbol in context.symbol:
+        symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
+        tickers.append(symbol)
+
+    run('test.db', results, 'faber', tickers)

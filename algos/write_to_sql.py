@@ -3,6 +3,7 @@ import pandas as pd
 from sqlite3 import Error
 import numpy
 import sqlalchemy
+import sys
 
 def create_connection(db_file):
 	"""
@@ -46,13 +47,14 @@ def add_column(index, column, df):
 	df.insert(index, column, pd.Series(strat_name, index=df.index))
 	return None
 
-def write_to_db(db, results, strat_name):
+def write_to_db(db, results, strat_name, tickers):
 	"""
-	Writes the contents of a pandas DataFrame to a SQLite database
+	Writes the contents of a pandas DataFrame to a SQLite database.
 
-	Input: the connection object to the database, a pandas DataFrame, and the name of the trading strategy used
+	Input: the connection object to the database, a pandas DataFrame, 
+		   the name of the trading strategy used, and a list of the stock tickers used in testing.
 
-	Output: results written to the database
+	Output: results written to the database.
 	"""
 	# create sqlalchemy engine
 	engine = sqlalchemy.create_engine('sqlite:///test.db')
@@ -75,7 +77,18 @@ def write_to_db(db, results, strat_name):
 	dataframe = pd.DataFrame(list(results), columns=['Metric'])
 
 	# add trading strategy column
-	dataframe.insert(0, 'Trading Strategy', pd.Series(strat_name))
+	dataframe.insert(0, 'Trading strategy', pd.Series(strat_name))
+
+	# add stock tickers
+	dataframe.insert(1, 'Ticker', pd.Series(tickers))
+
+	# add start date
+	start_date = sys.argv[sys.argv.index('--start') + 1]
+	dataframe.insert(2, 'Start date', pd.Series(start_date))
+
+	# add end date
+	end_date = sys.argv[sys.argv.index('--end') + 1]	
+	dataframe.insert(3, 'End date', pd.Series(end_date))
 
 	# concatenate metric values and metrics
 	dataframe = pd.concat([dataframe, metrics], axis=1)
@@ -83,12 +96,12 @@ def write_to_db(db, results, strat_name):
 	# now write dataframe to sql
 	dataframe.to_sql('test', engine, if_exists='append', index=False, index_label=False)
 
-def run(database, dataframe, strat_name):
+def run(database, dataframe, strat_name, tickers):
 	# create a db connection
 	conn = sqlite3.connect(database)
 
 	if conn is not None:
-		write_to_db(database, dataframe, strat_name)
+		write_to_db(database, dataframe, strat_name, tickers)
 	else:
 		print "Cannot connect to the database."
 
