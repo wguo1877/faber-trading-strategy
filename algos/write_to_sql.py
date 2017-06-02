@@ -67,16 +67,21 @@ def write_to_db(db, results, strat_name):
 	metrics = results.iloc[0]
 
 	# initialize "final" dataframe	
-	dataframe = pd.Series.to_frame(metrics)
+	metrics = pd.Series.to_frame(metrics)
+	metrics.columns = ['Metric value']
+	metrics.set_index([range(len(metrics.index))], inplace=True)
 
-	# add name of strategy
-	dataframe.insert(0, 'Trading Strategy', pd.Series(strat_name, index=results.index))
+	# initialize dataframe
+	dataframe = pd.DataFrame(list(results), columns=['Metric'])
 
-	# add names of metrics
-	dataframe.insert(1, 'Metric', pd.Series(list(results)))
+	# add trading strategy column
+	dataframe.insert(0, 'Trading Strategy', pd.Series(strat_name))
+
+	# concatenate metric values and metrics
+	dataframe = pd.concat([dataframe, metrics], axis=1)
 
 	# now write dataframe to sql
-	dataframe.to_sql('test', engine, if_exists='replace', index=False, index_label=False)
+	dataframe.to_sql('test', engine, if_exists='append', index=False, index_label=False)
 
 def run(database, dataframe, strat_name):
 	# create a db connection

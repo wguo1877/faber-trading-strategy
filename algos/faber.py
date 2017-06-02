@@ -4,6 +4,7 @@ from numpy import mean
 from collections import defaultdict
 from zipline.api import order, record, symbol, date_rules, time_rules, schedule_function
 from write_to_sql import run
+import pandas as pd
 import os
 
 def initialize(context):
@@ -137,8 +138,6 @@ def analyze(context = None, results = None):
     """
     import matplotlib.pyplot as plt
 
-    run('test.db', results, 'faber')
-
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
 
@@ -149,3 +148,5 @@ def analyze(context = None, results = None):
     ax1.set_ylabel('Portfolio value (USD)')
 
     plt.show()
+
+    run('test.db', results, 'faber')

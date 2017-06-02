@@ -109,9 +109,6 @@ def analyze(context = None, results = None):
     Output: a plot of two superimposed curves, one being Faber's strategy and the other being a buy-and-hold strategy.
     """
     import matplotlib.pyplot as plt
-
-    run('test.db', results, 'dual_moving_avg')
-
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
 
@@ -122,3 +119,6 @@ def analyze(context = None, results = None):
     ax1.set_ylabel('Portfolio value (USD)')
 
     plt.show()
+
+    run('test.db', results, 'dual_moving_avg')
+
