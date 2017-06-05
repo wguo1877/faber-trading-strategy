@@ -6,6 +6,7 @@ from zipline.api import order, record, symbol, date_rules, time_rules, schedule_
 from write_to_sql import run
 import pandas as pd
 import os
+from zipline import run_algorithm
 
 def initialize(context):
     """
@@ -15,11 +16,6 @@ def initialize(context):
     
     Output: n/a
     """
-    # set initial cash to 1 mil
-    context.portfolio.portfolio_value = float(1000000)
-    context.portfolio.cash = float(1000000)
-    context.portfolio.positions_value = float(0)
-
     context.benchmark = symbol('SPY')
 
     context.symbol = [symbol('XLB'),
@@ -37,9 +33,6 @@ def initialize(context):
     context.moving_avg = defaultdict(int)
     context.monthly_price = defaultdict(list)
 
-    # keep track of how much one buys per monthly buying period
-    context.money_spent = 0
-
     # skip the first 10 months so that we have enough data to establish our moving average    
     schedule_function(buy_monthly, date_rules.month_end(), time_rules.market_close())
 
@@ -51,6 +44,7 @@ def handle_data(context, data):
     
     Output: some kind of action (buy/sell/nothing)
     """
+    # context.portfolio.starting_cash = float(100000)
     pass
 
 def buy_monthly(context, data):
@@ -61,9 +55,10 @@ def buy_monthly(context, data):
     
     Output: some kind of action (buy/sell/nothing) on the last trading day of each month
     """
+    # context.portfolio.starting_cash = float(100000)
 
     context.skip += 1
-    context.money_spent = 0
+    money_spent = 0
 
     if context.skip < 10:
         for asset in context.symbol:
@@ -80,47 +75,29 @@ def buy_monthly(context, data):
 
             # Get closing price on last trading day of month
             context.monthly_price[asset].append(price)
-            context.monthly_price[asset] = context.monthly_price[asset][1:11]
 
             # calculate the 10-month moving average of each asset
-            context.moving_avg[asset] = mean(context.monthly_price[asset])
-
+            context.moving_avg[asset] = mean(context.monthly_price[asset][context.skip - 9: context.skip])
         
         ### Faber's trading strategy ###
         
         # if the current price exceeds moving average, long
         for asset in context.symbol:
             # the most current monthly price will be the one added most recently (so it'll be the element on the end of the list)
-            # if context.monthly_price[asset][-1] > context.moving_avg[asset] and context.portfolio.cash > 0:
-            if context.monthly_price[asset][-1] > context.moving_avg[asset] and context.money_spent < context.portfolio.portfolio_value:
+            if context.monthly_price[asset][-1] > context.moving_avg[asset] and money_spent < context.portfolio.portfolio_value:
                 order(asset, 500)
                 context.shares[asset] += 500
 
                 # add amount ordered to total money spent during this specific buying period
-                context.money_spent += 500 * data.current(asset, 'price')
-
-                # change cash amount
-                context.portfolio.cash -= 500 * data.current(asset, 'price')
-
-                # change positions value
-                context.portfolio.positions_value += 500 * data.current(asset, 'price')
+                money_spent += 500 * data.current(asset, 'price')
 
             # else if the current price is below moving average, short
-            elif context.monthly_price[asset][-1] < context.moving_avg[asset] and context.shares[asset] > 0:
+            elif context.monthly_price[asset][-1] < context.moving_avg[asset]:
                 order(asset, -context.shares[asset])
                 context.shares[asset] = 0
 
-                # change cash amount
-                context.portfolio.cash += context.shares[asset] * data.current(asset, 'price')
-
-                # change positions value
-                context.portfolio.positions_value -= context.shares[asset] * data.current(asset, 'price')
-
             # save/record the data for future plotting
             # record(asset = context.monthly_price[asset][-1], sma = context.moving_avg[asset])
-
-        # calculate current portfolio_value
-        context.portfolio.portfolio_value = context.portfolio.cash + context.portfolio.positions_value
 
         # record portfolio value
         record(portfolio = context.portfolio.portfolio_value)

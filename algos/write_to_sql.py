@@ -63,10 +63,23 @@ def write_to_db(db, results, strat_name, tickers):
 	results = results.drop(['SPY','period_open', 'period_label', 
 								'period_close','orders', 'positions', 'transactions'], 1)
 	results = results.round(3)
-	results = results.tail(n=1)
+
+	# get the metrics for the first and last day of trading
+	beginning = results.head(n=1)
+	end = results.tail(n=1)
+
+	# get certain starting metrics
+	starting_cash = beginning.iloc[0]['starting_cash']
+	starting_exposure = beginning.iloc[0]['starting_exposure']
+	starting_value = beginning.iloc[0]['starting_value']
 
 	# combine trading_strat and results
-	metrics = results.iloc[0]
+	metrics = end.iloc[0]
+
+	# add the starting metric values
+	metrics['starting_cash'] = starting_cash
+	metrics['starting_exposure'] = starting_exposure
+	metrics['starting_value'] = starting_value
 
 	# initialize "final" dataframe	
 	metrics = pd.Series.to_frame(metrics)

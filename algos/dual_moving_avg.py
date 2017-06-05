@@ -15,11 +15,6 @@ def initialize(context):
     
     Output: n/a
     """
-    # set initial cash to 1 mil 
-    context.portfolio.portfolio_value = float(1000000)
-    context.portfolio.cash = float(1000000)
-    context.portfolio.positions_value = float(0)
-
     context.benchmark = symbol('SPY')
 
     context.symbol = [symbol('XLB'),
@@ -34,9 +29,6 @@ def initialize(context):
     context.long_sma = defaultdict(int)
     context.short_sma = defaultdict(int)
 
-    # keep track of how much one buys per monthly buying period
-    context.money_spent = 0
-
     # initializes certain params in handle_data that must be run only on the first event
     context.init = True
 
@@ -48,7 +40,8 @@ def handle_data(context, data):
     
     Output: some kind of action (buy/sell/nothing) on the last trading day of each month
     """
-    context.money_spent = 0
+    money_spent = 0
+    value = context.portfolio.portfolio_value
 
     if context.init == True:
         # to scale the S&P's value to how much our portfolio is worth
@@ -57,42 +50,31 @@ def handle_data(context, data):
 
     for asset in context.symbol:
         # calculate 200-day and 20-day sma
-        context.long_sma[asset] = mean(data.history(asset, 'price', 100,'1d'))
-        context.short_sma[asset] = mean(data.history(asset, 'price', 10, '1d'))
+        context.long_sma[asset] = mean(data.history(asset, 'price', 200,'1d'))
+        context.short_sma[asset] = mean(data.history(asset, 'price', 20, '1d'))
+
+    # # calculate new positions_value (since our positions should have changed value over time)
+    # for asset in context.symbol:
+    #     context.portfolio.positions_value += context.shares[asset] * data.current(asset, 'close')
     
     ### Trading strategy ###
-    
+
     for asset in context.symbol:
         # if the short_sma > long_sma, buy
-        if context.short_sma[asset] > context.long_sma[asset] and 1.5 * context.money_spent < context.portfolio.portfolio_value:
+        if context.short_sma[asset] > context.long_sma[asset] and money_spent < value:
             order(asset, 500)
             context.shares[asset] += 500
 
             # add amount ordered to total money spent during this specific buying period
-            context.money_spent += 500 * data.current(asset, 'price')
-
-            # change cash amount
-            context.portfolio.cash -= 500 * data.current(asset, 'price')
-
-            # change positions value
-            context.portfolio.positions_value += 500 * data.current(asset, 'price')
+            money_spent += 500 * data.current(asset, 'price')
 
         # else if the current price is below moving average, short
         elif context.short_sma[asset] < context.long_sma[asset] and context.shares[asset] > 0:
             order(asset, -context.shares[asset])
             context.shares[asset] = 0
 
-            # change cash amount
-            context.portfolio.cash += context.shares[asset] * data.current(asset, 'price')
-
-            # change positions value
-            context.portfolio.positions_value -= context.shares[asset] * data.current(asset, 'price')
-
         # save/record the data for future plotting
         # record(asset = context.monthly_price[asset][-1], sma = context.moving_avg[asset])
-
-        # calculate current portfolio_value
-        context.portfolio.portfolio_value = context.portfolio.cash + context.portfolio.positions_value
 
         # record portfolio value
         record(portfolio = context.portfolio.portfolio_value)
@@ -120,5 +102,10 @@ def analyze(context = None, results = None):
 
     plt.show()
 
-    run('test.db', results, 'dual_moving_avg')
+    tickers = []
+    for symbol in context.symbol:
+        symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
+        tickers.append(symbol)
+
+    run('test.db', results, 'dual_moving_avg', tickers)
 
