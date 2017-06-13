@@ -26,11 +26,6 @@ def initialize(context):
                       symbol('XLP'), 
                       symbol('XLY')]
 
-    # context.benchmark = symbol('GOOG')
-
-    # context.symbol = [symbol('AAPL'),
-    #                   symbol('MSFT')]
-
     # skip the first 300 days of the timeframe so that we have enough data to calculate our 10 month SMA
     context.skip = 0
     context.init = True
@@ -39,7 +34,6 @@ def initialize(context):
     context.shares = defaultdict(int)
     context.moving_avg = defaultdict(int)
     context.monthly_price = defaultdict(list)  
-    context.closing_price = defaultdict(int)
 
     context.set_commission(commission.PerShare(cost=0))
 
@@ -102,24 +96,24 @@ def buy_monthly(context, data):
         # if the current price exceeds moving average and we haven't already bought any shares, buy
         for asset in context.symbol:
             # the most current monthly price will be the one added most recently (so it'll be the element on the end of the list)
-            if context.monthly_price[asset][-1] >= context.moving_avg[asset] and context.shares[asset] == 0:
+            if context.monthly_price[asset][-1] >= context.moving_avg[asset]:
                 # order_target(asset, 50, limit_price=data.current(asset, 'price'))
-                order_target(asset, 50)
-                context.shares[asset] = 50
+                order_target(asset, 500)
+                context.shares[asset] = 500
 
             # else if the current price is below moving average and we have 500 shares of the asset, sell
-            elif context.monthly_price[asset][-1] < context.moving_avg[asset] and context.shares[asset] == 50:
+            elif context.monthly_price[asset][-1] < context.moving_avg[asset]:
                 order_target(asset, 0)
                 context.shares[asset] = 0
 
-        # record portfolio value
-        record(portfolio = context.portfolio.portfolio_value)
+        # # record portfolio value
+        # record(portfolio = context.portfolio.portfolio_value)
 
-        # record returns
-        record(returns = context.portfolio.returns)
+        # # record returns
+        # record(returns = context.portfolio.returns)
 
-        # also record the S&P 500 monthly price
-        record(SPY = context.ratio * data.current(context.benchmark, 'close'))
+        # # also record the S&P 500 monthly price
+        # record(SPY = context.ratio * data.current(context.benchmark, 'close'))
      
 def analyze(context = None, results = None):
     """
@@ -129,36 +123,40 @@ def analyze(context = None, results = None):
     
     Output: a plot of two superimposed curves, one being Faber's strategy and the other being a buy-and-hold strategy.
     """
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
-    txn = results['transactions']
-    txn.to_csv('transactions.csv')
+    # txn = results['transactions']
+    # txn.to_csv('transactions.csv')
 
-    fig = plt.figure()
-    ax1 = fig.add_subplot(211)
+    # fig = plt.figure()
+    # ax1 = fig.add_subplot(211)
 
-    # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
-    results['portfolio'].plot(ax=ax1)
-    results['SPY'].plot(ax=ax1)
-    ax1.set_ylabel('Portfolio value (USD)')
+    # # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
+    # results['portfolio'].plot(ax=ax1)
+    # results['SPY'].plot(ax=ax1)
+    # ax1.set_ylabel('Portfolio value (USD)')
 
-    ax2 = fig.add_subplot(212)
-    results['returns'].plot(ax=ax2)
-    ax2.set_ylabel('Cumulative Returns')
+    # ax2 = fig.add_subplot(212)
+    # results['returns'].plot(ax=ax2)
+    # ax2.set_ylabel('Cumulative Returns')
 
-    # export portfolio values to csv file
-    # results['portfolio'].to_csv('zipline2.csv')
-
-    results['SPY'].to_csv('benchmark.csv')
+    # results['SPY'].to_csv('benchmark.csv')
    
-    # export portfolio values to csv file
-    results['returns'].to_csv('zipline_returns.csv')
+    # # export portfolio values to csv file
+    # results['returns'].to_csv('zipline_returns.csv')
 
-    plt.show()
+    # plt.show()
 
-    tickers = []
-    for symbol in context.symbol:
-        symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
-        tickers.append(symbol)
 
-    run('test.db', results, 'faber', tickers)
+    import pyfolio as pf
+
+    returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(results)
+
+    pf.create_full_tear_sheet(returns, positions=positions, transactions=transactions)
+
+    # tickers = []
+    # for symbol in context.symbol:
+    #     symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
+    #     tickers.append(symbol)
+
+    # run('test.db', results, 'faber', tickers)
