@@ -2,12 +2,15 @@ import sys
 sys.path.append('C:/Users/William/Documents/GitHub/faber-trading-strategy/algos')
 from numpy import mean
 from collections import defaultdict
-from zipline.api import order, order_target, record, symbol, date_rules, time_rules, schedule_function
+from zipline.api import order, order_target, record, symbol, date_rules, time_rules, schedule_function, set_slippage, slippage
 from write_to_sql import run
 import pandas as pd
-import os
 
+from zipline import TradingAlgorithm
 from zipline.finance import commission
+
+priorOpen = None
+priorClose = None
 
 def initialize(context):
     """
@@ -17,6 +20,9 @@ def initialize(context):
     
     Output: n/a
     """
+    set_slippage(TradeAtTheCloseSlippageModel(priorOpen,priorClose,0.0))
+    context.set_commission(commission.PerShare(cost=0))
+
     context.benchmark = symbol('SPY')
 
     context.symbol = [symbol('XLB'),
@@ -30,15 +36,15 @@ def initialize(context):
     context.skip = 0
     context.init = True
 
-    # keep track of number of shares bought
-    context.shares = defaultdict(int)
     context.moving_avg = defaultdict(int)
-    context.monthly_price = defaultdict(list)  
+    context.monthly_price = defaultdict(list) 
 
-    context.set_commission(commission.PerShare(cost=0))
+    # keeps track of which assets to trade 
+    context.buy = []
+    context.sell = []
 
     # skip the first 10 months so that we have enough data to establish our moving average    
-    schedule_function(buy_monthly, date_rules.month_end(days_offset=0), time_rules.market_close(minutes=2))
+    schedule_function(get_assets, date_rules.month_end(), time_rules.market_open(minutes=1))
 
 def handle_data(context, data):
     """
@@ -48,25 +54,22 @@ def handle_data(context, data):
     
     Output: some kind of action (buy/sell/nothing)
     """
-    # context.portfolio.starting_cash = float(100000)
     pass
 
-def buy_monthly(context, data):
+def get_assets(context, data):
     """
-    Herein lies Faber's trading strategy.
+    Although we actually trade at the beginning of the trading month, the way Zipline handles orders is that the fill prices of orders
+    are the next bar's closing price. We have a list of assets we want to trade and we order_target() them, allowing us to purchase
+    using the end of the previous month's closing price.
     
     Input: persistent namespace with SID(s) 'context', event-frame that handles look-ups of historical/current pricing data
     
-    Output: some kind of action (buy/sell/nothing) on the last trading day of each month
-    """
-
+    Output: a list of assets to trade
+    """    
     context.skip += 1
-    value = context.portfolio.portfolio_value
 
-    # reevaluate portfolio
-    context.positions = 0
-    for asset in context.symbol:
-        context.positions += context.shares[asset] * data.current(asset, 'close')
+    context.buy = []
+    context.sell = []
 
     if context.skip < 10:
         for asset in context.symbol:
@@ -74,11 +77,9 @@ def buy_monthly(context, data):
             context.monthly_price[asset].append(price)
 
     else:
-        # record benchmark's "first" price
-        if context.init == True:
+        if context.skip == 10:
             context.ratio = context.portfolio.portfolio_value / data.current(context.benchmark, 'close')
-            context.init = False
-
+            
         for asset in context.symbol:
             price = data.current(asset, 'close')
 
@@ -97,24 +98,28 @@ def buy_monthly(context, data):
         for asset in context.symbol:
             # the most current monthly price will be the one added most recently (so it'll be the element on the end of the list)
             if context.monthly_price[asset][-1] >= context.moving_avg[asset]:
-                # order_target(asset, 50, limit_price=data.current(asset, 'price'))
-                order_target(asset, 500)
-                context.shares[asset] = 500
+                context.buy.append(asset)
+                order_target(asset,50)
 
             # else if the current price is below moving average and we have 500 shares of the asset, sell
             elif context.monthly_price[asset][-1] < context.moving_avg[asset]:
+                context.sell.append(asset)
                 order_target(asset, 0)
-                context.shares[asset] = 0
 
-        # # record portfolio value
-        # record(portfolio = context.portfolio.portfolio_value)
+        record(poop = context.portfolio.portfolio_value)
+        record(SPY = context.ratio * data.current(context.benchmark, 'close'))
 
-        # # record returns
-        # record(returns = context.portfolio.returns)
-
-        # # also record the S&P 500 monthly price
-        # record(SPY = context.ratio * data.current(context.benchmark, 'close'))
-     
+    global priorOpen
+    global priorClose
+    
+    priorOpen = {}
+    priorClose = {}
+    
+    for sid in data:
+        priorOpen[sid] = data[sid].open_price
+        priorClose[sid] = data[sid].close_price
+        # print sid.symbol+' prior open/close: '+str(priorOpen[sid])+'/'+str(priorClose[sid])
+    
 def analyze(context = None, results = None):
     """
     Plots the results of the strategy against a buy-and-hold strategy.
@@ -123,36 +128,32 @@ def analyze(context = None, results = None):
     
     Output: a plot of two superimposed curves, one being Faber's strategy and the other being a buy-and-hold strategy.
     """
-    # import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt
 
-    # txn = results['transactions']
-    # txn.to_csv('transactions.csv')
+    fig = plt.figure()
+    ax1 = fig.add_subplot(211)
 
-    # fig = plt.figure()
-    # ax1 = fig.add_subplot(211)
+    # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
+    results['poop'].plot(ax=ax1)
+    results['SPY'].plot(ax=ax1)
+    ax1.set_ylabel('Portfolio value (USD)')
 
-    # # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
-    # results['portfolio'].plot(ax=ax1)
-    # results['SPY'].plot(ax=ax1)
-    # ax1.set_ylabel('Portfolio value (USD)')
+    ax2 = fig.add_subplot(212)
+    results['returns'].plot(ax=ax2)
+    ax2.set_ylabel('Cumulative Returns')
 
-    # ax2 = fig.add_subplot(212)
-    # results['returns'].plot(ax=ax2)
-    # ax2.set_ylabel('Cumulative Returns')
-
-    # results['SPY'].to_csv('benchmark.csv')
+    results['SPY'].to_csv('benchmark.csv')
    
-    # # export portfolio values to csv file
-    # results['returns'].to_csv('zipline_returns.csv')
+    # export portfolio values to csv file
+    results['poop'].to_csv('zipline_returns.csv')
 
-    # plt.show()
+    plt.show()
 
+    # import pyfolio as pf
 
-    import pyfolio as pf
-
-    returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(results)
-
-    pf.create_full_tear_sheet(returns, positions=positions, transactions=transactions)
+    # returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(results)
+    # transactions.to_csv("txn_end.csv")
+    # pf.create_simple_tear_sheet(returns, positions=positions, transactions=transactions)
 
     # tickers = []
     # for symbol in context.symbol:
@@ -160,3 +161,31 @@ def analyze(context = None, results = None):
     #     tickers.append(symbol)
 
     # run('test.db', results, 'faber', tickers)
+
+########################################################  
+# Slippage model to trade at the prior close or at a fraction of the prior open - close range.  
+class TradeAtTheCloseSlippageModel(slippage.SlippageModel):  
+    '''Class for slippage model to allow trading at the prior close  
+       or at a fraction of the prior open to close range.  
+    '''  
+    # Constructor, self and fraction of the prior open to close range to add (subtract)  
+    # from the prior open to model executions more optimistically  
+    def __init__(self, priorOpen,priorClose,fractionOfOpenCloseRange):
+
+        # Store the percent of prior open - close range to take as the execution price  
+        self.priorOpen = priorOpen
+        self.priorClose = priorClose
+        self.fractionOfOpenCloseRange = fractionOfOpenCloseRange
+
+    def process_order(self, trade_bar, order):
+
+        openPrice = priorOpen[order.sid]  
+        closePrice = priorClose[order.sid]  
+        ocRange = closePrice - openPrice  
+        ocRange = ocRange * self.fractionOfOpenCloseRange  
+        if (ocRange != 0.0):  
+            targetExecutionPrice = closePrice - ocRange  
+        else:  
+            targetExecutionPrice = closePrice  
+
+        return (targetExecutionPrice, order.amount)
