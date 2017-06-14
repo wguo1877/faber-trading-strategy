@@ -79,7 +79,7 @@ def get_assets(context, data):
     else:
         if context.skip == 10:
             context.ratio = context.portfolio.portfolio_value / data.current(context.benchmark, 'close')
-            
+
         for asset in context.symbol:
             price = data.current(asset, 'close')
 
@@ -98,16 +98,16 @@ def get_assets(context, data):
         for asset in context.symbol:
             # the most current monthly price will be the one added most recently (so it'll be the element on the end of the list)
             if context.monthly_price[asset][-1] >= context.moving_avg[asset]:
-                context.buy.append(asset)
+                # context.buy.append(asset)
                 order_target(asset,50)
 
             # else if the current price is below moving average and we have 500 shares of the asset, sell
             elif context.monthly_price[asset][-1] < context.moving_avg[asset]:
-                context.sell.append(asset)
+                # context.sell.append(asset)
                 order_target(asset, 0)
 
-        record(poop = context.portfolio.portfolio_value)
-        record(SPY = context.ratio * data.current(context.benchmark, 'close'))
+        # record(poop = context.portfolio.portfolio_value)
+        # record(SPY = context.ratio * data.current(context.benchmark, 'close'))
 
     global priorOpen
     global priorClose
@@ -128,39 +128,40 @@ def analyze(context = None, results = None):
     
     Output: a plot of two superimposed curves, one being Faber's strategy and the other being a buy-and-hold strategy.
     """
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
-    fig = plt.figure()
-    ax1 = fig.add_subplot(211)
+    # fig = plt.figure()
+    # ax1 = fig.add_subplot(211)
 
-    # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
-    results['poop'].plot(ax=ax1)
-    results['SPY'].plot(ax=ax1)
-    ax1.set_ylabel('Portfolio value (USD)')
+    # # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
+    # results['poop'].plot(ax=ax1)
+    # results['SPY'].plot(ax=ax1)
+    # ax1.set_ylabel('Portfolio value (USD)')
 
-    ax2 = fig.add_subplot(212)
-    results['returns'].plot(ax=ax2)
-    ax2.set_ylabel('Cumulative Returns')
+    # ax2 = fig.add_subplot(212)
+    # results['returns'].plot(ax=ax2)
+    # ax2.set_ylabel('Cumulative Returns')
 
-    results['SPY'].to_csv('benchmark.csv')
+    # results['SPY'].to_csv('benchmark.csv')
    
-    # export portfolio values to csv file
-    results['poop'].to_csv('zipline_returns.csv')
+    # # export portfolio values to csv file
+    # results['poop'].to_csv('zipline_returns.csv')
 
-    plt.show()
+    # plt.show()
 
-    # import pyfolio as pf
+    import pyfolio as pf
 
-    # returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(results)
-    # transactions.to_csv("txn_end.csv")
-    # pf.create_simple_tear_sheet(returns, positions=positions, transactions=transactions)
+    returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(results)
+    transactions.to_csv("txn_end.csv")
+    positions.to_csv("positions.csv")
+    pf.create_simple_tear_sheet(returns, positions=positions, transactions=transactions)
 
-    # tickers = []
-    # for symbol in context.symbol:
-    #     symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
-    #     tickers.append(symbol)
+    tickers = []
+    for symbol in context.symbol:
+        symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
+        tickers.append(symbol)
 
-    # run('test.db', results, 'faber', tickers)
+    run('test.db', results, 'faber', tickers)
 
 ########################################################  
 # Slippage model to trade at the prior close or at a fraction of the prior open - close range.  

@@ -60,7 +60,7 @@ def write_to_db(db, results, strat_name, tickers):
 	engine = sqlalchemy.create_engine('sqlite:///test.db')
 
 	# round column numbers and remove problematic columns
-	results = results.drop(['SPY','period_open', 'period_label', 
+	results = results.drop(['period_open', 'period_label', 
 								'period_close','orders', 'positions', 'transactions'], 1)
 	results = results.round(3)
 
