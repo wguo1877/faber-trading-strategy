@@ -19,6 +19,8 @@ def initialize(context):
     """
     context.benchmark = symbol('SPY')
 
+    # context.symbol = [symbol('AAPL')]
+
     context.symbol = [symbol('XLB'),
                       symbol('XLE'),
                       symbol('XLF'), 
@@ -27,18 +29,23 @@ def initialize(context):
                       symbol('XLY')]
 
     # keep track of number of shares bought
-    context.shares = defaultdict(int)
+    # context.shares = defaultdict(int)
     context.long_sma = defaultdict(int)
     context.short_sma = defaultdict(int)
 
     context.set_commission(commission.PerShare(cost=0))
 
     # initializes certain params in handle_data that must be run only on the first event
-    context.init = True
+    context.skip = 0
 
     context.ratio = 0
+    schedule_function(skip_days, date_rules.every_day(), time_rules.market_open(minutes=1))
+    schedule_function(trade, date_rules.every_day(), time_rules.market_open(minutes=3))
 
-def handle_data(context, data):
+def skip_days(context, data):
+    context.skip += 1
+
+def trade(context, data):
     """
     Herein lies Faber's trading strategy.
     
@@ -46,42 +53,41 @@ def handle_data(context, data):
     
     Output: some kind of action (buy/sell/nothing) on the last trading day of each month
     """
-    if context.init == True:
-        # to scale the S&P's value to how much our portfolio is worth
-        context.ratio = context.portfolio.portfolio_value / data.current(context.benchmark, 'close')
-        context.init = False
+    if context.skip < 200:
+        pass
 
-    for asset in context.symbol:
-        # calculate 200-day and 20-day sma
-        context.long_sma[asset] = mean(data.history(asset, 'close', 200,'1d'))
-        context.short_sma[asset] = mean(data.history(asset, 'close', 20, '1d'))
+    else:
+        for asset in context.symbol:
+            # calculate 200-day and 20-day sma
+            context.long_sma[asset] = mean(data.history(asset, 'close', 200,'1d'))
+            context.short_sma[asset] = mean(data.history(asset, 'close', 50, '1d'))
+      
+        ### Trading strategy ###
 
-    # # calculate new positions_value (since our positions should have changed value over time)
-    # for asset in context.symbol:
-    #     context.portfolio.positions_value += context.shares[asset] * data.current(asset, 'close')
-    
-    ### Trading strategy ###
+        for asset in context.symbol:
+            # if the short_sma > long_sma, buy
+            if context.short_sma[asset] >= context.long_sma[asset]:
+                order_target(asset, 100)
+                # context.shares[asset] = 100
 
-    for asset in context.symbol:
-        # if the short_sma > long_sma, buy
-        if context.short_sma[asset] > context.long_sma[asset]:
-            order_target(asset, 500)
-            context.shares[asset] = 500
+            # else if the current price is below moving average, short
+            elif context.short_sma[asset] < context.long_sma[asset]:
+                order_target(asset, 0)
+                # context.shares[asset] = 0
 
-        # else if the current price is below moving average, short
-        elif context.short_sma[asset] < context.long_sma[asset]:
-            order_target(asset, 0)
-            context.shares[asset] = 0
+            # save/record the data for future plotting
+            # record(asset = context.monthly_price[asset][-1], sma = context.moving_avg[asset])
 
-        # save/record the data for future plotting
-        # record(asset = context.monthly_price[asset][-1], sma = context.moving_avg[asset])
+            # record portfolio value
+            # record(portfolio = context.portfolio.portfolio_value)
 
-        # # record portfolio value
-        # record(portfolio = context.portfolio.portfolio_value)
+            # # also record the S&P 500 monthly price
+            # record(SPY = context.ratio * data.current(context.benchmark, 'close'))
+       
 
-        # # also record the S&P 500 monthly price
-        # record(SPY = context.ratio * data.current(context.benchmark, 'close'))
-     
+def handle_data(context, data):
+    pass
+
 def analyze(context = None, results = None):
     """
     Plots the results of the strategy against a buy-and-hold strategy.
@@ -100,15 +106,9 @@ def analyze(context = None, results = None):
 
     # # plot both the portfolio based on faber's strategy and a buy-and-hold strategy
     # results['portfolio'].plot(ax=ax1)
-    # results['SPY'].plot(ax=ax1)
+    # # results['SPY'].plot(ax=ax1)
     # ax1.set_ylabel('Portfolio value (USD)')
-
-    # ax2 = fig.add_subplot(212)
-    # results['returns'].plot(ax=ax2)
-    # ax2.set_ylabel('Cumulative Returns')
-
-    # results['SPY'].to_csv('benchmark.csv')
-   
+ 
     # # export portfolio values to csv file
     # results['returns'].to_csv('zipline_returns.csv')
 
@@ -119,7 +119,7 @@ def analyze(context = None, results = None):
 
     returns, positions, transactions = pf.utils.extract_rets_pos_txn_from_zipline(results)
     pf.create_simple_tear_sheet(returns, positions=positions, transactions=transactions) 
-
+    transactions.to_csv('transactions.csv')
     # tickers = []
     # for symbol in context.symbol:
     #     symbol = str(symbol).translate(None, '0123456789[]() ')[6:]
